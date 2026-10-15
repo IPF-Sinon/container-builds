@@ -2,10 +2,12 @@ name: build-images
 
 # 因为上游两个项目都没有发布可用的镜像，这里自建并推到 GHCR。
 # 推完后镜像地址为：
-#   ghcr.io/<你的GitHub用户名>/workbuddy2api:latest
-#   ghcr.io/<你的GitHub用户名>/trae2api:latest
+#   ghcr.io/<你的GitHub用户名(小写)>/workbuddy2api:latest
+#   ghcr.io/<你的GitHub用户名(小写)>/trae2api:latest
 #
-# 注意：仓库若是 private，GHCR 包默认也是 private，1Panel 宿主机需要先
+# 注意 1：镜像名必须全小写，而 github.repository_owner 会保留大小写，
+#         所以下面用一步 tr 转换后写入 $IMAGE_NS。
+# 注意 2：仓库若是 private，GHCR 包默认也是 private，1Panel 宿主机需要先
 #   docker login ghcr.io -u <用户名> -p <PAT>
 # 才能拉取；仓库设为 public 则镜像自动公开。
 
@@ -41,6 +43,10 @@ jobs:
           git -C upstream checkout "$WORKBUDDY_SHA"
           git -C upstream rev-parse HEAD
 
+      # 镜像名必须全小写，repository_owner 可能是 IPF-Sinon 这种带大写的
+      - name: Resolve lowercase image namespace
+        run: echo "IMAGE_NS=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -58,8 +64,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/workbuddy2api:latest
-            ghcr.io/${{ github.repository_owner }}/workbuddy2api:sha-${{ github.sha }}
+            ghcr.io/${{ env.IMAGE_NS }}/workbuddy2api:latest
+            ghcr.io/${{ env.IMAGE_NS }}/workbuddy2api:sha-${{ github.sha }}
 
   trae2api:
     name: build trae2api
@@ -76,6 +82,9 @@ jobs:
           git -C upstream checkout "$TRAE_SHA"
           git -C upstream rev-parse HEAD
 
+      - name: Resolve lowercase image namespace
+        run: echo "IMAGE_NS=$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -85,7 +94,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 直接用上游自带的 Dockerfile（Go 多阶段构建，非 root + healthcheck）
+      # 直接复用上游自带的 Dockerfile（Go 多阶段构建，非 root + healthcheck）
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -94,5 +103,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/trae2api:latest
-            ghcr.io/${{ github.repository_owner }}/trae2api:sha-${{ github.sha }}
+            ghcr.io/${{ env.IMAGE_NS }}/trae2api:latest
+            ghcr.io/${{ env.IMAGE_NS }}/trae2api:sha-${{ github.sha }}
